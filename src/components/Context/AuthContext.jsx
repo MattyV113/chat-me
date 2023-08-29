@@ -38,11 +38,15 @@ function AuthProvider(props) {
   const [darkMode, setDarkMode] = useState(true);
   const cookies = new Cookies();
   const token = cookies.get('token');
-  const ws = new WebSocket(`ws://localhost:3001/?token=${token}`);
-
+  const socket = io.connect('http://localhost:3000', {
+    auth: { token },
+  });
   useEffect(() => {
     setSessionStorage('user', auth);
-  }, [auth]);
+    return () => {
+      socket.disconnect();
+    };
+  }, [auth, socket]);
 
   return (
     <AuthContext.Provider
@@ -51,7 +55,7 @@ function AuthProvider(props) {
         setDarkMode,
         auth,
         setAuth,
-        ws,
+        socket,
       }}
     >
       {props.children}

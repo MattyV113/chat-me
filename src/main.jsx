@@ -7,7 +7,7 @@ import ErrorPage from './components/RouteError';
 import { io } from 'socket.io-client';
 import Login from './components/Credentials/Login';
 import UserChat from './components/ChatBox/UserChat';
-import AuthProvider from './components/Context/AuthContext';
+import AuthProvider, { useAuth } from './components/Context/AuthContext';
 import Cookies from 'universal-cookie';
 
 const router = createBrowserRouter([
@@ -21,7 +21,7 @@ const router = createBrowserRouter([
     element: <SignUp />,
   },
   {
-    path: '/:id',
+    path: `/rooms/:id`,
     element: <UserChat />,
   },
   {

@@ -1,26 +1,15 @@
 import express from 'express';
 import { createServer } from 'http';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import { router as userRoute } from './routes/Users.js';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { PrismaClient, Prisma } from '@prisma/client';
-import WebSocket, { WebSocketServer } from 'ws';
-import { authSocketMiddleware } from './authSocketMiddleware.js';
 
-const wss = new WebSocketServer({
-  port: 3001,
-  perMessageDeflate: {
-    zlibDeflateOptions: {
-      chunkSize: 1024,
-      memLevel: 7,
-      level: 3,
-    },
-    zlibInflateOptions: {
-      chunkSize: 10 * 1024,
-    },
-  },
-});
+import jwt from 'jsonwebtoken';
+import { connected } from 'process';
+const { verify } = jwt;
 
 const prisma = new PrismaClient();
 
@@ -36,40 +25,63 @@ app.use(cors({ credentials: true, origin: 'http://localhost:5173' }));
 
 const httpServer = createServer(app);
 
+const jwtKey = process.env.MY_JWT_KEY;
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+});
+
+const connectedUsers = {};
+
 app.use('/users', userRoute);
 
-const activeConnections = {};
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
 
-wss.on('connection', authSocketMiddleware, (ws, req) => {
-  // Authenticate the user
-  const userId = req;
-
-  if (!userId) {
-    ws.close();
-    return;
-  }
-
-  // Store the WebSocket connection for the user
-  activeConnections[userId] = ws;
-
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      const { recipientId, content } = data;
-
-      // Send the message to the recipient
-      const recipientSocket = activeConnections[recipientId];
-      if (recipientSocket) {
-        recipientSocket.send(JSON.stringify({ senderId: userId, content }));
-      }
-    } catch (error) {
-      console.error('Error handling message:', error);
+  verify(token, jwtKey, (err, decoded) => {
+    if (err) {
+      return next(new Error('Authentication Error.'));
     }
+
+    socket.user = decoded;
+    next();
+  });
+}).on('connect', (socket) => {
+  console.log('A user connected ' + socket.user.username);
+
+  // Store the user ID when a user connects
+  socket.on('username', async (username) => {
+    const user = await prisma.user.findUnique({
+      where: {
+        username,
+      },
+    });
+    connectedUsers[socket.id] = user;
+    io.emit('connected', user);
   });
 
-  ws.on('close', () => {
-    // Remove the closed connection from activeConnections
-    delete activeConnections[userId];
+  // Handle the event to send a message to a specific user
+  socket.on('send-message', (data) => {
+    io.emit('message', {
+      message: data.message,
+      date: new Date.toISOString(),
+      author: connectedUsers[socket.id],
+    });
+  });
+
+  // Handle disconnections
+  socket.on('disconnect', () => {
+    // Remove the user from the connected users list
+    const disconnectedUserId = Object.keys(connectedUsers).find(
+      (key) => connectedUsers[key] === socket.user.id
+    );
+    if (disconnectedUserId) {
+      delete connectedUsers[disconnectedUserId];
+      console.log(`User ${disconnectedUserId} disconnected`);
+    }
   });
 });
 
@@ -98,21 +110,63 @@ app.post('/messages/:id', async (req, res) => {
         }
         console.log(err);
       }
+      const recipientSocketId = connectedUsers[recipientId];
+
+      if (recipientSocketId) {
+        // Send the message to the recipient user
+        io.to(recipientSocketId).emit('messageReceived', messages.content);
+        res.status(200).json({ success: true });
+      } else {
+        res.status(404).json({ success: false, message: 'User not found' });
+      }
     });
 });
 
 app.get('/messages/:id', async (req, res) => {
-  const messages = await prisma.message.findMany({
+  const messages = await prisma.message.findUnique({
     where: {
       authorId: req.params.id,
     },
   });
 
-  if (!messages) {
-    res.status(404).json({ msg: 'No messages found' });
-  }
+  return res.status(200).json(messages);
+});
 
-  res.status(200).json(messages);
+app.post('/rooms', async (req, res) => {
+  const { name } = req.body;
+  const room = await prisma.room
+    .create({
+      data: {
+        name,
+      },
+    })
+    .catch((err) => {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2014') {
+          res.status(400).json({
+            msg: `Invalid id: ${err.meta.target}.`,
+          });
+        }
+        if (err.code === 'P2003') {
+          res.status(400).json({
+            msg: `Invalid input data:  ${err.meta.target}.`,
+          });
+        } else {
+          res.status(500).json({
+            msg: `Something went wrong ${err.meta.target}, please try again.`,
+          });
+        }
+        console.log(err);
+      }
+    });
+  console.log(room);
+  return res.json(room);
+});
+
+app.get('/rooms', async (req, res) => {
+  const rooms = await prisma.room.findMany();
+
+  return res.json(rooms);
 });
 
 httpServer.listen(3000, () => {

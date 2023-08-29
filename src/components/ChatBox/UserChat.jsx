@@ -11,20 +11,16 @@ import Cookies from 'universal-cookie';
 function UserChat() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState(['']);
-  const [otherUser, setOtherUser] = useState({});
-  const { darkMode, setDarkMode, auth, ws } = useAuth();
+  const [room, setRoom] = useState('');
+  const { darkMode, setDarkMode, auth, socket } = useAuth();
   const { id } = useParams();
-
-  const userId = auth.id;
-  const recipientId = otherUser.id;
 
   useEffect(() => {
     const fetchUser = async () => {
       await axios
-        .get(`http://localhost:3000/users/${id}`)
+        .get(`http://localhost:3000/rooms/${id}`)
         .then((res) => {
-          let data = res.data;
-          setOtherUser(data);
+          setRoom(res.data);
         })
         .catch((err) => {
           console.log(err);
@@ -32,31 +28,18 @@ function UserChat() {
     };
     fetchUser();
 
-    ws.onopen = () => {
-      console.log('WebSocket connection established');
-    };
-  }, [userId, socket, id]);
+    socket.on('connection', () => {
+      socket.emit('username', auth.username);
+    });
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    await axios
-      .post(`http://localhost:3000/messages/${id}`, {
-        message,
-        author: userId,
-        recipientId,
-      })
-      .then(() => {
-        ws.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          const { senderId, content } = data;
-          console.log(`Message from user ${senderId}: ${content}`);
-        };
-      })
-      .catch((err) => {
-        console.log(err);
-      });
-    setMessage('');
-  };
+    socket.on('send-message', (data) => {
+      setMessages((prev) => [...prev, data]);
+      console.log(data);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [auth.username, socket, id]);
 
   const toggleDark = () => {
     setDarkMode((prev) => !prev);
@@ -74,9 +57,9 @@ function UserChat() {
           )}
         </div>
         <div className="h-[600px] relative  md:w-[800px]   p-2  dark:border-white rounded border border-black m-auto">
-          <h1>Chatting With {otherUser.username}</h1>
+          <h1>Room: {room.id}</h1>
           <div className="text-black dark:text-white m-auto">
-            {messages.map((message, id) => {
+            {messages?.map((message, id) => {
               return (
                 <p
                   className="p-2 w-[10%] mt-4 bg-blue-400 rounded-xl text-white ml-[20px] "
@@ -95,10 +78,7 @@ function UserChat() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />
-            <button
-              onClick={handleSendMessage}
-              className="border p-1 dark:bg-black  border-black dark:text-white rounded w-[60px]"
-            >
+            <button className="border p-1 dark:bg-black  border-black dark:text-white rounded w-[60px]">
               SEND
             </button>
           </div>{' '}

@@ -6,15 +6,19 @@ import { MdDarkMode } from 'react-icons/md';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useAuth } from './components/Context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Cookies from 'universal-cookie';
 import UserChat from './components/ChatBox/UserChat';
+import JoinRoom from './components/Modals/JoinRoom';
+import MakeRoom from './components/Modals/MakeRoom';
 
 function Home() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState(null);
-  const { darkMode, setDarkMode, auth, ws } = useAuth();
-
+  const { darkMode, setDarkMode, auth, socket } = useAuth();
+  const navigate = useNavigate();
+  const [showModal, setShowModal] = useState(false);
+  const [joinRoom, setJoinRoom] = useState(false);
   const cookies = new Cookies();
   const token = cookies.get('token');
 
@@ -35,6 +39,11 @@ function Home() {
 
   const toggleDark = () => {
     setDarkMode((prev) => !prev);
+  };
+
+  const joinChatRoom = () => {
+    setShowModal(true);
+    setJoinRoom(true);
   };
 
   return (
@@ -62,11 +71,7 @@ function Home() {
                 if (user.username !== auth.username) {
                   return (
                     <>
-                      <Link
-                        key={i}
-                        to={`/${user.id}`}
-                        className="flex h-[80px]  text-xl pl-2  border-b-[3px] rounded dark:border-white  flex-row  "
-                      >
+                      <p className="flex h-[80px]  text-xl pl-2  border-b-[3px] rounded dark:border-white  flex-row  ">
                         <img
                           className="rounded-full mt-3 w-[50px] h-[50px] ml-4 "
                           src={user.profileImage}
@@ -74,7 +79,7 @@ function Home() {
                         />
 
                         <p className="ml-4 pt-6">{user.username}</p>
-                      </Link>
+                      </p>
                     </>
                   );
                 }
@@ -85,20 +90,45 @@ function Home() {
               </p>
             )}
           </div>
-          <div className="h-[600px] relative  md:w-[800px]  p-2  dark:border-white rounded border border-black m-auto">
-            <div className="text-black dark:text-white gap-[60px] mt-6 justify-center flex flex-col m-auto">
-              <h1 className="text-2xl  text-center">
-                Welcome {auth?.username}! Select a User to Chat With!
-              </h1>
-              <img
-                src={auth?.profileImage}
-                alt="user-image"
-                className="rounded-full m-auto w-[100px] object-fit mt-6"
-              />
-              <p className="text-3xl text-center">{auth?.username}</p>
-              <p>Hobbies: {auth?.hobbies}</p>
-              <p>Favorite Food: {auth?.favFood}</p>
-            </div>{' '}
+
+          <div className="h-[650px] relative  md:w-[800px]  p-2  dark:border-white rounded border border-black m-auto">
+            {showModal ? (
+              <>
+                {showModal && joinRoom ? (
+                  <JoinRoom setShowModal={setShowModal} />
+                ) : (
+                  <MakeRoom setShowModal={setShowModal} />
+                )}
+              </>
+            ) : (
+              <div className="text-black dark:text-white gap-[60px] mt-6 justify-center flex flex-col m-auto">
+                <h1 className="text-2xl  text-center">
+                  Welcome {auth?.username}!
+                </h1>
+                <img
+                  src={auth?.profileImage}
+                  alt="user-image"
+                  className="rounded-full m-auto w-[100px] object-fit mt-6"
+                />
+                <p className="text-3xl text-center">{auth?.username}</p>
+                <p>Hobbies: {auth?.hobbies}</p>
+                <p>Favorite Food: {auth?.favFood}</p>
+                <div className="flex flex-row gap-2 m-auto">
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="border border-black bg-green-400 hover:bg-green-500 text-black p-2 m-auto rounded "
+                  >
+                    Start Chat Room
+                  </button>
+                  <button
+                    onClick={joinChatRoom}
+                    className="border border-black bg-green-400 hover:bg-green-500 text-black p-2 m-auto rounded "
+                  >
+                    Join Chat Room
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

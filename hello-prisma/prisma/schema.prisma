@@ -20,6 +20,14 @@ model Message {
   authorId  String
 }
 
+model Room {
+   id        String     @id @default(cuid())
+   name     String?
+   author    User       @relation(fields: [authorId], references: [id])
+   authorId  String
+
+}
+
 
 model User {
   id      String     @id @default(cuid())
@@ -30,4 +38,5 @@ model User {
   hobbies String
   favFood String
   messages  Message[]
+  rooms Room[]
 }
