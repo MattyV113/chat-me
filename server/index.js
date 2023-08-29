@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { router as userRoute } from './routes/Users.js';
+import { router as roomRoute } from './routes/Rooms.js';
+
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -37,6 +39,7 @@ const io = new Server(httpServer, {
 const connectedUsers = {};
 
 app.use('/users', userRoute);
+app.use('/rooms', roomRoute);
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -130,43 +133,6 @@ app.get('/messages/:id', async (req, res) => {
   });
 
   return res.status(200).json(messages);
-});
-
-app.post('/rooms', async (req, res) => {
-  const { name } = req.body;
-  const room = await prisma.room
-    .create({
-      data: {
-        name,
-      },
-    })
-    .catch((err) => {
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
-        if (err.code === 'P2014') {
-          res.status(400).json({
-            msg: `Invalid id: ${err.meta.target}.`,
-          });
-        }
-        if (err.code === 'P2003') {
-          res.status(400).json({
-            msg: `Invalid input data:  ${err.meta.target}.`,
-          });
-        } else {
-          res.status(500).json({
-            msg: `Something went wrong ${err.meta.target}, please try again.`,
-          });
-        }
-        console.log(err);
-      }
-    });
-  console.log(room);
-  return res.json(room);
-});
-
-app.get('/rooms', async (req, res) => {
-  const rooms = await prisma.room.findMany();
-
-  return res.json(rooms);
 });
 
 httpServer.listen(3000, () => {

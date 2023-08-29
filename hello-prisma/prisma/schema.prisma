@@ -23,8 +23,7 @@ model Message {
 model Room {
    id        String     @id @default(cuid())
    name     String?
-   author    User       @relation(fields: [authorId], references: [id])
-   authorId  String
+  
 
 }
 
@@ -38,5 +37,4 @@ model User {
   hobbies String
   favFood String
   messages  Message[]
-  rooms Room[]
 }
